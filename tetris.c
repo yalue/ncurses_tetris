@@ -135,7 +135,49 @@ static void CreateWindows(TetrisDisplay *windows) {
   PrintWindowTitle(windows->next_piece, " Next ");
 }
 
+// Clears the status line if something is there. Doesn't refresh the screen.
+static void ClearStatusLine(TetrisDisplay *windows) {
+  WINDOW *w = windows->top_window;
+  int i;
+  // Move the cursor and write the first char.
+  CheckCursesError(mvwaddch(w, 1, 2, ' '));
+  // Remove the remaining characters.
+  for (i = 1; i < (sizeof(windows->status_message) - 1); i++) {
+    CheckCursesError(waddch(w, ' '));
+  }
+  windows->status_message[0] = 0;
+}
+
+// Writes the status message to the game display, or clears it if the timeout
+// has elapsed. To set a new status message, write the message to
+// windows->status_message and set windows->status_start_time to
+// CurrentSeconds().
+static void WriteStatusMessage(TetrisDisplay *windows) {
+  WINDOW *w = windows->top_window;
+  double displayed_duration;
+  // We have no current status message.
+  if (windows->status_message[0] == 0) return;
+
+  // Clear the status message if it's been displayed for over 5 seconds.
+  displayed_duration = CurrentSeconds() - windows->status_start_time;
+  if (displayed_duration >= 5.0) {
+    ClearStatusLine(windows);
+    return;
+  }
+
+  // We expect the typical behavior to being *not* displaying a status message,
+  // so I don't care if this runs every update while a status is being
+  // displayed.
+  windows->status_message[sizeof(windows->status_message) - 1] = 0;
+  CheckCursesError(mvwprintw(w, 1, 2, "%s", windows->status_message));
+  // I don't understand why yet, but mvwprintw deletes the right border
+  // character after the status line.
+  CheckCursesError(mvwaddch(w, 1, getmaxx(w) - 1, '|'));
+}
+
+// Handles the ncurses calls to flush the content to the terminal.
 static void RefreshAllWindows(TetrisDisplay *windows) {
+  WriteStatusMessage(windows);
   CheckCursesError(refresh());
   CheckCursesError(wrefresh(windows->top_window));
   CheckCursesError(wrefresh(windows->game));
@@ -160,11 +202,14 @@ static void DestroyWindows(TetrisDisplay *windows) {
 // Prints a status message to the top of the game display's main window.
 static void StatusPrintf(TetrisDisplay *windows, const char *format, ...) {
   va_list args;
+  ClearStatusLine(windows);
   va_start(args, format);
+  memset(windows->status_message, 0, sizeof(windows->status_message));
   vsnprintf(windows->status_message, sizeof(windows->status_message) - 1,
     format, args);
   va_end(args);
   windows->status_start_time = CurrentSeconds();
+  WriteStatusMessage(windows);
 }
 
 // If c is a non-printable character (or just something we don't want to print
@@ -208,40 +253,6 @@ static void DrawNextPiece(WINDOW *w, uint8_t piece) {
       CheckCursesError(mvwprintw(w, screen_y, screen_x, "%c%c", c, c));
     }
   }
-}
-
-// Writes the status message to the game display, or clears it if the timeout
-// has elapsed. To set a new status message, write the message to
-// windows->status_message and set windows->status_start_time to
-// CurrentSeconds().
-static void WriteStatusMessage(TetrisDisplay *windows) {
-  WINDOW *w = windows->top_window;
-  double displayed_duration;
-  int i;
-  // We have no current status message.
-  if (windows->status_message[0] == 0) return;
-
-  // Clear the status message if it's been displayed for over 5 seconds.
-  displayed_duration = CurrentSeconds() - windows->status_start_time;
-  if (displayed_duration >= 5.0) {
-    // Set the cursor location and remove the first char
-    CheckCursesError(mvwaddch(w, 1, 2, ' '));
-    // Remove the remaining chars.
-    for (i = 1; i < (sizeof(windows->status_message) - 1); i++) {
-      CheckCursesError(waddch(w, ' '));
-    }
-    windows->status_message[0] = 0;
-    return;
-  }
-
-  // We expect the typical behavior to being *not* displaying a status message,
-  // so I don't care if this runs every update while a status is being
-  // displayed.
-  windows->status_message[sizeof(windows->status_message) - 1] = 0;
-  CheckCursesError(mvwprintw(w, 1, 2, "%s", windows->status_message));
-  // I don't understand why yet, but mvwprintw deletes the right border
-  // character after the status line.
-  CheckCursesError(mvwaddch(w, 1, getmaxx(w) - 1, '|'));
 }
 
 // Returns 1 if a space is available for a falling block, and 0 if not. Returns
@@ -288,7 +299,6 @@ static void DrawFallingPiece(WINDOW *w, TetrisGameState *s) {
 
 // Writes the score, piece, and so on, in the game window.
 static void DisplayGameState(TetrisDisplay *windows, TetrisGameState *s) {
-  WriteStatusMessage(windows);
   DrawBoard(windows->game, s->board);
   DrawNextPiece(windows->next_piece, s->next_piece);
   DrawFallingPiece(windows->game, s);
@@ -722,8 +732,8 @@ int main(int argc, char **argv) {
     case (' '):
       should_exit = RunGame(&windows, 0);
       if (!should_exit) {
-        RefreshAllWindows(&windows);
         StatusPrintf(&windows, "Game over!");
+        RefreshAllWindows(&windows);
       }
       ClearGameBoard(&windows);
       break;
