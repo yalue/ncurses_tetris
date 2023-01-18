@@ -2,14 +2,14 @@
 #define TETRIS_H
 // We'll use this file to contain commonly-accessed struct definitions from
 // tetris.c.
+#include <curses.h>
+#include <stdint.h>
 
 // The width and height of the area where the blocks go, in blocks rather than
 // characters.
 #define BLOCKS_WIDE (10)
 #define BLOCKS_TALL (20)
 
-#include <curses.h>
-#include <stdint.h>
 
 // This struct keeps track of the tetris display windows from ncurses.
 typedef struct {
@@ -26,6 +26,13 @@ typedef struct {
   WINDOW *line_count;
   // The window showing a preview of the next piece.
   WINDOW *next_piece;
+  // The status message to be displayed. strlen(status_message) must be 0 if no
+  // message should be displayed.
+  char status_message[40];
+  // The time at which the current status message was first displayed. Used so
+  // we can automatically clear the status message after a certain amount of
+  // time has elapsed.
+  double status_start_time;
 } TetrisDisplay;
 
 // This holds everything we need to know about the current state of an ongoing
@@ -58,7 +65,8 @@ typedef struct {
 
 // We statically define each piece as a 16-byte strings here. Note that when
 // the game is being rendered, the widths of these will be doubled. This
-// contains all pieces along with their rotations. There are 19 of them.
+// contains all pieces along with their rotations. There are 19 of them. Note
+// that the pieces in this array are "upside down", with the bottom row first.
 const char *tetris_pieces[] = {
   // 0:
   "===="
