@@ -384,48 +384,36 @@ static int TryMovingDown(TetrisGameState *s) {
 // if the movement is blocked.
 static void TryMovingLeft(TetrisGameState *s) {
   const char *p = tetris_pieces[s->current_piece];
-  int piece_row, piece_col;
-  // Stop early if we're already on the leftmost column.
-  if (s->piece_y == 0) return;
+  int piece_x, piece_y, board_x, board_y;
+  // Can't move left at all if we're already on the left edge.
+  if (s->piece_x == 0) return;
 
-  // This is like TryMovingDown, except we'll check to the left of the leftmost
-  // non-empty cell in each row of the piece.
-  for (piece_row = 0; piece_row < 4; piece_row++) {
-    for (piece_col = 0; piece_col < 4; piece_col++) {
-      if (p[piece_row * 4 + piece_col] == ' ') continue;
-      if (SpaceAvailable(s->board, piece_col + s->piece_x - 1,
-        piece_row + s->piece_y + 1)) {
-        break;
-      }
-      // There's something to the left.
-      return;
+  for (piece_y = 0; piece_y < 4; piece_y++) {
+    board_y = s->piece_y - piece_y;
+    for (piece_x = 0; piece_x < 4; piece_x++) {
+      board_x = s->piece_x + piece_x;
+      if (p[piece_y * 4 + piece_x] == ' ') continue;
+      if (!SpaceAvailable(s->board, board_x - 1, board_y)) return;
     }
   }
-  // Move left.
   s->piece_x--;
 }
 
 // Similar to TryMovingLeft, but attempts to move the falling piece right.
 static void TryMovingRight(TetrisGameState *s) {
   const char *p = tetris_pieces[s->current_piece];
-  int piece_row, piece_col;
+  int piece_x, piece_y, board_x, board_y;
   // Unfortunately, we can't stop early here, because the rightmost column
   // depends on how far right the piece is (most pieces aren't 4 wide!).
 
-  for (piece_row = 0; piece_row < 4; piece_row++) {
-    // Check from right to left.
-    for (piece_col = 3; piece_col >= 0; piece_col--) {
-      if (p[piece_row * 4 + piece_col] == ' ') continue;
-      // SpaceAvailable already returns false if we're too far right.
-      if (SpaceAvailable(s->board, piece_col + s->piece_x + 1,
-        piece_row + s->piece_y)) {
-        break;
-      }
-      // There's something to the right.
-      return;
+  for (piece_y = 0; piece_y < 4; piece_y++) {
+    board_y = s->piece_y - piece_y;
+    for (piece_x = 0; piece_x < 4; piece_x++) {
+      board_x = s->piece_x + piece_x;
+      if (p[piece_y * 4 + piece_x] == ' ') continue;
+      if (!SpaceAvailable(s->board, board_x + 1, board_y)) return;
     }
   }
-  // Move right.
   s->piece_x++;
 }
 
@@ -466,17 +454,18 @@ static void RemoveRowAndShift(uint8_t *board, int row) {
   }
 }
 
-TetrisDisplay *global_windows; //////////////////////////////////////////////// DEBUG
-
-// This must be called after a falling piece has landed but *before*
-// FinishFallingPiece. This checks the rows of the falling piece for completed
-// lines, removes blocks, and updates the score.
-static void CheckForCompleteLines(TetrisGameState *s) {
+// This function checks for completed lines, removes any complete lines, and
+// scores points for lines completed. This must be called after a falling piece
+// has landed and after FinishFallingPiece has finished. However,
+// FinishFallingPiece will modify s->piece_y, so the caller is responsible for
+// keeping track of the y position that just landed, and provide it.
+static void CheckForCompleteLines(TetrisDisplay *w, TetrisGameState *s,
+  int fallen_piece_y) {
   int completed_row_count = 0;
   int completed_rows[4];
   int board_x, board_y, row_ok, i;
 
-  for (board_y = s->piece_y - 3; board_y <= s->piece_y; board_y++) {
+  for (board_y = fallen_piece_y - 3; board_y <= fallen_piece_y; board_y++) {
     row_ok = 1;
     for (board_x = 0; board_x < BLOCKS_WIDE; board_x++) {
       if (!SpaceAvailable(s->board, board_x, board_y)) continue;
@@ -487,7 +476,6 @@ static void CheckForCompleteLines(TetrisGameState *s) {
     completed_rows[completed_row_count] = board_y;
     completed_row_count++;
   }
-  StatusPrintf(global_windows, "Completed %d lines!\n", completed_row_count);
   if (completed_row_count == 0) return;
 
   // Now that we've identified the completed rows, clear the pieces and shift
@@ -495,6 +483,7 @@ static void CheckForCompleteLines(TetrisGameState *s) {
   for (i = 0; i < completed_row_count; i++) {
     RemoveRowAndShift(s->board, completed_rows[i]);
   }
+  ClearGameBoard(w);
   s->lines += completed_row_count;
   switch (completed_row_count) {
   case 1:
@@ -529,20 +518,6 @@ static void FinishFallingPiece(TetrisGameState *s) {
       s->board[board_y * BLOCKS_WIDE + board_x] = c;
     }
   }
-/*
-  int x, y, i;
-
-  // First, copy the piece to the board.
-  i = 0;
-  for (y = s->piece_y; y < (s->piece_y + 4); y++) {
-    for (x = s->piece_x; x < (s->piece_x + 4); x++) {
-      if (p[i] != ' ') {
-        s->board[y * BLOCKS_WIDE + x] = p[i];
-      }
-      i++;
-    }
-  }
-  */
 
   // Next, get the new falling piece.
   s->current_piece = s->next_piece;
@@ -556,9 +531,10 @@ static void FinishFallingPiece(TetrisGameState *s) {
 // UpdateGameState, the input key that has been pressed (which may be ERR if no
 // key was pressed), and the timer (accumulator) to keep track of when the
 // falling piece needs to be moved down next. Returns 0 on game over.
-static int UpdateGameState(TetrisGameState *s, double delta, int input_key,
-  double *down_movement_timer) {
+static int UpdateGameState(TetrisDisplay *w, TetrisGameState *s, double delta,
+  int input_key, double *down_movement_timer) {
   int done_falling = 0;
+  int fallen_piece_y = 0;
   // This is the number of seconds after which the piece moves down regardless
   // of what has been pressed.
   double down_movement_threshold = 0.7;
@@ -597,8 +573,9 @@ static int UpdateGameState(TetrisGameState *s, double delta, int input_key,
   if (done_falling) {
     // It's a game over if the falling piece is at all above the board.
     if (IsGameOver(s)) return 0;
-    CheckForCompleteLines(s);
+    fallen_piece_y = s->piece_y;
     FinishFallingPiece(s);
+    CheckForCompleteLines(w, s, fallen_piece_y);
   }
   return 1;
 }
@@ -698,7 +675,7 @@ static int RunGame(TetrisDisplay *windows, int initial_quickload) {
     default:
       // Any directional movement, no keypress, or some random keypress will
       // be handled here.
-      game_done = !UpdateGameState(&s, time_delta, input_key,
+      game_done = !UpdateGameState(windows, &s, time_delta, input_key,
         &down_movement_timer);
       last_update_time = CurrentSeconds();
       break;
@@ -710,14 +687,13 @@ static int RunGame(TetrisDisplay *windows, int initial_quickload) {
 int main(int argc, char **argv) {
   TetrisDisplay windows;
   int input_key, should_exit;
-  srand(CurrentSeconds() * 1e9);
+  srand(time(NULL));
   if (!setlocale(LC_ALL, "")) {
     printf("Failed setting locale: %s\n", strerror(errno));
     return 1;
   }
   SetupCurses();
   CreateWindows(&windows);
-  global_windows = &windows;
   // This loop controls the game over / new game screen, where we initially
   // start.
   should_exit = 0;
