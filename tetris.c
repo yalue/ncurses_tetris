@@ -198,69 +198,17 @@ static void DrawBoard(WINDOW *w, uint8_t *board) {
 // tetris_pieces array. Draws the piece in the window.
 static void DrawNextPiece(WINDOW *w, uint8_t piece) {
   const char *p = tetris_pieces[piece];
-  // Follows a very similar pattern to DrawBoard
-  int x, y, i = 0;
+  int piece_x, piece_y, screen_x, screen_y;
   char c;
-  for (y = 3; y < 7; y++) {
-    for (x = 4; x < 12; x += 2) {
-      c = p[i];
-      CheckCursesError(mvwprintw(w, y, x, "%c%c", c, c));
-      i++;
+  for (piece_y = 0; piece_y < 4; piece_y++) {
+    screen_y = 5 - piece_y;
+    for (piece_x = 0; piece_x < 4; piece_x++) {
+      c = p[piece_y * 4 + piece_x];
+      screen_x = (piece_x * 2) + 3;
+      CheckCursesError(mvwprintw(w, screen_y, screen_x, "%c%c", c, c));
     }
   }
 }
-
-// Returns 1 if a space is available for a falling block, and 0 if not. Returns
-// 0 if the given position is either out of bounds, or overlapping with an
-// existing block. The x, y coordinate is in game cells, NOT ncurses rows/cols.
-static int SpaceAvailable(uint8_t *board, int x, int y) {
-  char c;
-  if ((x < 0) || (y < 0)) return 0;
-  if ((x >= BLOCKS_WIDE) || (y >= BLOCKS_TALL)) return 0;
-  c = board[y * BLOCKS_WIDE + x];
-  return (c <= ' ') || (c >= '~');
-}
-
-static void DrawFallingPiece(WINDOW *w, TetrisGameState *s) {
-  const char *p = tetris_pieces[s->current_piece];
-  int x, y, screen_x, init_screen_x, i = 0;
-  char c;
-  screen_x = (2 * s->piece_x) + 1;
-  init_screen_x = screen_x;
-  for (y = s->piece_y; y < (s->piece_y + 4); y++) {
-    for (x = s->piece_x; x < (s->piece_x + 4); x++) {
-      c = p[i];
-      // We ignore empty parts of the piece, as we wouldn't want to overwrite
-      // existing blocks with empty space.
-      if (c == ' ') {
-        i++;
-        screen_x += 2;
-        continue;
-      }
-      // Since we're dealing with a part of the block that's actually there,
-      // ensure that it's within the board boundaries and not overlapping any
-      // existing piece.
-      if (!SpaceAvailable(s->board, x, y)) {
-        endwin();
-        printf("The current piece is in an invalid location!\n");
-        exit(1);
-      }
-      CheckCursesError(mvwprintw(w, y + 1, screen_x, "%c%c", c, c));
-      screen_x += 2;
-      i++;
-    }
-    screen_x = init_screen_x;
-  }
-}
-
-// TODO: Sanity checks for quickload:
-//  - Make sure there are no completed rows in the board (would be impossible
-//    in a quicksave).
-//  - Score > lines
-//  - lines not negative
-//  - Next piece a valid index.
-//  - Current piece a valid index.
-//  - piece_x and piece_y are valid.
 
 // Writes the status message to the game display, or clears it if the timeout
 // has elapsed. To set a new status message, write the message to
@@ -295,6 +243,48 @@ static void WriteStatusMessage(TetrisDisplay *windows) {
   // character after the status line.
   CheckCursesError(mvwaddch(w, 1, getmaxx(w) - 1, '|'));
 }
+
+// Returns 1 if a space is available for a falling block, and 0 if not. Returns
+// 0 if the given position is either out of bounds, or overlapping with an
+// existing block. The x, y coordinate is in game cells, NOT ncurses rows/cols.
+static int SpaceAvailable(uint8_t *board, int x, int y) {
+  char c;
+  if ((x < 0) || (x >= BLOCKS_WIDE)) return 0;
+  // We always count space above the board as OK.
+  if (y < 0) return 1;
+  if (y >= BLOCKS_TALL) return 0;
+  c = board[y * BLOCKS_WIDE + x];
+  return (c <= ' ') || (c >= '~');
+}
+
+static void DrawFallingPiece(WINDOW *w, TetrisGameState *s) {
+  const char *p = tetris_pieces[s->current_piece];
+  int piece_x, piece_y, board_x, board_y, screen_x, screen_y;
+  char c;
+
+  for (piece_y = 0; piece_y < 4; piece_y++) {
+    board_y = s->piece_y - piece_y;
+    if (board_y < 0) continue;
+    screen_y = board_y + 1;
+    for (piece_x = 0; piece_x < 4; piece_x++) {
+      c = p[piece_y * 4 + piece_x];
+      if (c == ' ') continue;
+      board_x = s->piece_x + piece_x;
+      screen_x = board_x * 2 + 1;
+      CheckCursesError(mvwprintw(w, screen_y, screen_x, "%c%c", c, c));
+    }
+  }
+}
+
+// TODO: Sanity checks for quickload:
+//  - Make sure there are no completed rows in the board (would be impossible
+//    in a quicksave).
+//  - Score > lines
+//  - lines not negative
+//  - Next piece a valid index.
+//  - Current piece a valid index.
+//  - piece_x and piece_y are valid.
+
 
 // Writes the score, piece, and so on, in the game window.
 static void DisplayGameState(TetrisDisplay *windows, TetrisGameState *s) {
@@ -360,30 +350,18 @@ static void InitializeNewGame(TetrisGameState *s) {
 // blocked, otherwise moves the piece down by 1 row.
 static int TryMovingDown(TetrisGameState *s) {
   const char *p = tetris_pieces[s->current_piece];
-  int piece_col, piece_row;
+  int piece_x, piece_y, board_x, board_y;
 
-  // Stop early if the piece is on the bottom row already. Note that this is -2
-  // due to piece_y being irrespective of the characters allocated to the
-  // window border for simplicity elsewhere.
-  if (s->piece_y >= (BLOCKS_TALL - 2)) return 0;
-
-  // Loop over each column of the piece; find the lowest non-space cell in the
-  // piece, and then make sure the board is empty at the cell below. Since the
-  // piece is above the bottom row, it's always valid to check a row down.
-  // Note that the rows in the pieces in tetris_pieces are "upside down",
-  // starting with the *bottom* row.
-  for (piece_col = 0; piece_col < 4; piece_col++) {
-    for (piece_row = 0; piece_row < 4; piece_row++) {
-      if (p[piece_row * 4 + piece_col] == ' ') continue;
-      // We're now at the bottommost non-empty cell in this column of the
-      // piece, and can check that the board is empty one space below it.
-      if (SpaceAvailable(s->board, piece_col + s->piece_x,
-        piece_row + s->piece_y + 1)) {
-        // The bottom of this column is clear; move to the next column.
-        break;
-      }
-      // There wasn't space available below the bottom of this column.
-      return 0;
+  // NOTE: Can be more efficient.
+  for (piece_y = 0; piece_y < 4; piece_y++) {
+    board_y = s->piece_y - piece_y;
+    if (board_y < -1) continue;
+    for (piece_x = 0; piece_x < 4; piece_x++) {
+      if (p[piece_y * 4 + piece_x] == ' ') continue;
+      board_x = s->piece_x + piece_x;
+      // Note that the falling piece isn't part of the "board" yet, so we don't
+      // need to worry about it overlapping with itself.
+      if (!SpaceAvailable(s->board, board_x, board_y + 1)) return 0;
     }
   }
 
@@ -406,7 +384,7 @@ static void TryMovingLeft(TetrisGameState *s) {
     for (piece_col = 0; piece_col < 4; piece_col++) {
       if (p[piece_row * 4 + piece_col] == ' ') continue;
       if (SpaceAvailable(s->board, piece_col + s->piece_x - 1,
-        piece_row + s->piece_y)) {
+        piece_row + s->piece_y + 1)) {
         break;
       }
       // There's something to the left.
@@ -445,13 +423,31 @@ static void TryRotating(TetrisGameState *s) {
   // TODO: Implement TryRotating.
 }
 
+// Must be called after the falling piece can't fall any more, but *before*
+// FinishFallingPiece. Returns 1 if any of the falling piece is above the top
+// of the board.
+static int IsGameOver(TetrisGameState *s) {
+  const char *p = tetris_pieces[s->current_piece];
+  int piece_x, piece_y, board_y;
+  for (piece_y = 0; piece_y < 4; piece_y++) {
+    board_y = s->piece_y - piece_y;
+    for (piece_x = 0; piece_x < 4; piece_x++) {
+      if (p[piece_y * 4 + piece_x] == ' ') continue;
+      // We found a non-space part of the current piece that ended up above the
+      // board.
+      if (board_y < 0) return 1;
+    }
+  }
+  return 0;
+}
+
 // Removes the given row from the board, shifting down everything above it.
 static void RemoveRowAndShift(uint8_t *board, int row) {
-  int x, y, tmp;
+  int x, y, i;
   for (y = row; y < 0; y--) {
     for (x = 0; x < BLOCKS_WIDE; x++) {
-      tmp = y * BLOCKS_WIDE + x;
-      board[tmp] = board[tmp - BLOCKS_WIDE];
+      i = y * BLOCKS_WIDE + x;
+      board[i] = board[i - BLOCKS_WIDE];
     }
   }
   // Clear the top row.
@@ -460,27 +456,29 @@ static void RemoveRowAndShift(uint8_t *board, int row) {
   }
 }
 
+TetrisDisplay *global_windows; //////////////////////////////////////////////// DEBUG
+
 // This must be called after a falling piece has landed but *before*
 // FinishFallingPiece. This checks the rows of the falling piece for completed
 // lines, removes blocks, and updates the score.
 static void CheckForCompleteLines(TetrisGameState *s) {
   int completed_row_count = 0;
   int completed_rows[4];
-  int i, row, col, row_ok;
+  int board_x, board_y, row_ok, i;
 
-  // We *could* limit this to just the rows of the piece that contain a non-
-  // empty cell, but checking all four rows every time is much simpler.
-  for (row = s->piece_y; row < (s->piece_y + 4); row++) {
+  for (board_y = s->piece_y - 3; board_y <= s->piece_y; board_y++) {
     row_ok = 1;
-    for (col = 0; col < BLOCKS_WIDE; col++) {
-      if (!SpaceAvailable(s->board, col, row)) continue;
+    for (board_x = 0; board_x < BLOCKS_WIDE; board_x++) {
+      if (!SpaceAvailable(s->board, board_x, board_y)) continue;
       row_ok = 0;
       break;
     }
     if (!row_ok) continue;
-    completed_rows[completed_row_count] = row;
+    completed_rows[completed_row_count] = board_y;
     completed_row_count++;
   }
+  StatusPrintf(global_windows, "Completed %d lines!\n", completed_row_count);
+  if (completed_row_count == 0) return;
 
   // Now that we've identified the completed rows, clear the pieces and shift
   // everything above it down.
@@ -510,6 +508,18 @@ static void CheckForCompleteLines(TetrisGameState *s) {
 // generating a new falling piece.
 static void FinishFallingPiece(TetrisGameState *s) {
   const char *p = tetris_pieces[s->current_piece];
+  int piece_x, piece_y, board_x, board_y;
+  char c;
+  for (piece_y = 0; piece_y < 4; piece_y++) {
+    board_y = s->piece_y - piece_y;
+    for (piece_x = 0; piece_x < 4; piece_x++) {
+      c = p[piece_y * 4 + piece_x];
+      board_x = s->piece_x + piece_x;
+      if (c == ' ') continue;
+      s->board[board_y * BLOCKS_WIDE + board_x] = c;
+    }
+  }
+/*
   int x, y, i;
 
   // First, copy the piece to the board.
@@ -522,12 +532,13 @@ static void FinishFallingPiece(TetrisGameState *s) {
       i++;
     }
   }
+  */
 
   // Next, get the new falling piece.
   s->current_piece = s->next_piece;
   s->next_piece = RandomNewPiece();
   s->piece_x = BLOCKS_WIDE / 2;
-  s->piece_y = 0;
+  s->piece_y = -4;
 }
 
 // This function happens every time either a keypress occurs or
@@ -574,10 +585,8 @@ static int UpdateGameState(TetrisGameState *s, double delta, int input_key,
     *down_movement_timer = 0.0;
   }
   if (done_falling) {
-    // It's a game over if the falling piece didn't move down at all.
-    if (s->piece_y == 0) {
-      return 0;
-    }
+    // It's a game over if the falling piece is at all above the board.
+    if (IsGameOver(s)) return 0;
     CheckForCompleteLines(s);
     FinishFallingPiece(s);
   }
@@ -682,7 +691,6 @@ static int RunGame(TetrisDisplay *windows, int initial_quickload) {
       game_done = !UpdateGameState(&s, time_delta, input_key,
         &down_movement_timer);
       last_update_time = CurrentSeconds();
-      StatusPrintf(windows, "Here. Done = %d\n", game_done);
       break;
     }
   }
@@ -692,12 +700,14 @@ static int RunGame(TetrisDisplay *windows, int initial_quickload) {
 int main(int argc, char **argv) {
   TetrisDisplay windows;
   int input_key, should_exit;
+  srand(CurrentSeconds() * 1e9);
   if (!setlocale(LC_ALL, "")) {
     printf("Failed setting locale: %s\n", strerror(errno));
     return 1;
   }
   SetupCurses();
   CreateWindows(&windows);
+  global_windows = &windows;
   // This loop controls the game over / new game screen, where we initially
   // start.
   should_exit = 0;
@@ -712,6 +722,7 @@ int main(int argc, char **argv) {
     case (' '):
       should_exit = RunGame(&windows, 0);
       if (!should_exit) {
+        RefreshAllWindows(&windows);
         StatusPrintf(&windows, "Game over!");
       }
       ClearGameBoard(&windows);
@@ -722,6 +733,7 @@ int main(int argc, char **argv) {
       should_exit = RunGame(&windows, 1);
       if (!should_exit) {
         StatusPrintf(&windows, "Game over!");
+        RefreshAllWindows(&windows);
       }
       ClearGameBoard(&windows);
       break;
