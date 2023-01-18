@@ -178,8 +178,8 @@ static void DrawNextPiece(WINDOW *w, uint8_t piece) {
   // Follows a very similar pattern to DrawBoard
   int x, y, i = 0;
   char c;
-  for (y = 2; y < 6; y++) {
-    for (x = 2; x < 10; x += 2) {
+  for (y = 3; y < 7; y++) {
+    for (x = 4; x < 12; x += 2) {
       c = p[i];
       CheckCursesError(mvwprintw(w, y, x, "%c%c", c, c));
       i++;
