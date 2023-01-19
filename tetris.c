@@ -250,7 +250,8 @@ static void DrawNextPiece(WINDOW *w, short piece) {
     for (piece_x = 0; piece_x < 4; piece_x++) {
       c = p[piece_y * 4 + piece_x];
       screen_x = (piece_x * 2) + 3;
-      CheckCursesError(mvwprintw(w, screen_y, screen_x, "%c%c", c, c));
+      mvwaddch(w, screen_y, screen_x, c);
+      waddch(w, c);
     }
   }
 }
@@ -282,7 +283,9 @@ static void DrawFallingPiece(WINDOW *w, TetrisGameState *s) {
       if (c == ' ') continue;
       board_x = s->piece_x + piece_x;
       screen_x = board_x * 2 + 1;
-      CheckCursesError(mvwprintw(w, screen_y, screen_x, "%c%c", c, c));
+      // Do the same thing we do in DrawBoard.
+      mvwaddch(w, screen_y, screen_x, c);
+      waddch(w, c);
     }
   }
 }
@@ -292,8 +295,8 @@ static void DisplayGameState(TetrisDisplay *windows, TetrisGameState *s) {
   DrawBoard(windows->game, s->board);
   DrawNextPiece(windows->next_piece, s->next_piece);
   DrawFallingPiece(windows->game, s);
-  CheckCursesError(mvwprintw(windows->score, 1, 2, "% 11d", s->score));
-  CheckCursesError(mvwprintw(windows->line_count, 1, 2, "% 11d", s->lines));
+  mvwprintw(windows->score, 1, 2, "% 11d", s->score);
+  mvwprintw(windows->line_count, 1, 2, "% 11d", s->lines);
   RefreshAllWindows(windows);
 }
 
