@@ -594,7 +594,7 @@ static int UpdateGameState(TetrisDisplay *w, TetrisGameState *s, double delta,
   // of what has been pressed.
   double down_movement_threshold = 0.7;
   // Every 10 lines, the piece speeds up by 1 ms, until it gets to the point of
-  // moving down every frame at ~666 lines. When the threshold hits 0, it's
+  // moving down every frame at ~360 lines. When the threshold hits 0, it's
   // going to move down every single input event or frame, whichever comes
   // first!
   down_movement_threshold -= ((double) (s->lines / 10)) * 0.001;
