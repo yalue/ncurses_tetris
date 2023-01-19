@@ -49,12 +49,10 @@ typedef struct {
   // tetris_pieces array.
   short next_piece;
   // The x and y location of the current piece being dropped into the board, in
-  // a cell coordinate rather than a window character. Note that the coordinate
-  // of a piece corresponds to the top left corner of its definition in the
-  // tetris_pieces array. Also, note that these coordinates refer to the
-  // *bottom left* of the piece on the board!
-  int piece_x;
-  int piece_y;
+  // a cell coordinate rather than a window character.  Note that these
+  // coordinates refer to the *bottom left* of the falling piece on the board!
+  int location_x;
+  int location_y;
   // The piece that is currently "falling". Once again, it's an index into the
   // tetris_pieces array.
   short current_piece;

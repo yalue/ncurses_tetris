@@ -275,13 +275,13 @@ static void DrawFallingPiece(WINDOW *w, TetrisGameState *s) {
   char c;
 
   for (piece_y = 0; piece_y < 4; piece_y++) {
-    board_y = s->piece_y - piece_y;
+    board_y = s->location_y - piece_y;
     if (board_y < 0) continue;
     screen_y = board_y + 1;
     for (piece_x = 0; piece_x < 4; piece_x++) {
       c = p[piece_y * 4 + piece_x];
       if (c == ' ') continue;
-      board_x = s->piece_x + piece_x;
+      board_x = s->location_x + piece_x;
       screen_x = board_x * 2 + 1;
       // Do the same thing we do in DrawBoard.
       mvwaddch(w, screen_y, screen_x, c);
@@ -315,9 +315,9 @@ static short RandomNewPiece(void) {
 static int SanityCheckState(TetrisGameState *s) {
   int row, col, tmp;
   char c;
-  tmp = s->piece_x;
+  tmp = s->location_x;
   if ((tmp < 0) || (tmp >= BLOCKS_WIDE)) return 0;
-  tmp = s->piece_y;
+  tmp = s->location_y;
   if ((tmp < PIECE_START_Y) || (tmp >= BLOCKS_TALL)) return 0;
 
   // Important check: make sure the current piece is a valid piece ID.
@@ -401,8 +401,8 @@ static void InitializeNewGame(TetrisGameState *s) {
   s->next_piece = RandomNewPiece();
   s->current_piece = RandomNewPiece();
   // The piece starts at the top, in the middle.
-  s->piece_y = PIECE_START_Y;
-  s->piece_x = BLOCKS_WIDE / 2;
+  s->location_y = PIECE_START_Y;
+  s->location_x = BLOCKS_WIDE / 2;
 }
 
 // Returns 1 if the given piece can fit at coordinate new_x, new_y on the
@@ -425,22 +425,28 @@ static int PieceFits(TetrisGameState *s, short piece, int new_x, int new_y) {
 // Attempts to move a falling piece down by one spot. Returns 0 if the piece is
 // blocked, otherwise moves the piece down by 1 row.
 static int TryMovingDown(TetrisGameState *s) {
-  if (!PieceFits(s, s->current_piece, s->piece_x, s->piece_y + 1)) return 0;
-  s->piece_y++;
+  if (!PieceFits(s, s->current_piece, s->location_x, s->location_y + 1)) {
+    return 0;
+  }
+  s->location_y++;
   return 1;
 }
 
 // Attempts to move a falling piece left by one column. Doesn't move the piece
 // if the movement is blocked.
 static void TryMovingLeft(TetrisGameState *s) {
-  if (!PieceFits(s, s->current_piece, s->piece_x - 1, s->piece_y)) return;
-  s->piece_x--;
+  if (!PieceFits(s, s->current_piece, s->location_x - 1, s->location_y)) {
+    return;
+  }
+  s->location_x--;
 }
 
 // Similar to TryMovingLeft, but attempts to move the falling piece right.
 static void TryMovingRight(TetrisGameState *s) {
-  if (!PieceFits(s, s->current_piece, s->piece_x + 1, s->piece_y)) return;
-  s->piece_x++;
+  if (!PieceFits(s, s->current_piece, s->location_x + 1, s->location_y)) {
+    return;
+  }
+  s->location_x++;
 }
 
 // Attempts to rotate the current piece to its next position. Does nothing if
@@ -449,7 +455,7 @@ static void TryRotating(TetrisGameState *s) {
   short new_piece = piece_rotations[s->current_piece];
   int x_offset = 0;
   // First, see if the piece can simply be rotated.
-  if (PieceFits(s, new_piece, s->piece_x, s->piece_y)) {
+  if (PieceFits(s, new_piece, s->location_x, s->location_y)) {
     s->current_piece = new_piece;
     return;
   }
@@ -457,17 +463,17 @@ static void TryRotating(TetrisGameState *s) {
   // to the left first, since getting pushed right seems less likely with the
   // pieces already being aligned on the left side of their 4x4 boxes.
   for (x_offset = 1; x_offset < 4; x_offset++) {
-    if (PieceFits(s, new_piece, s->piece_x + x_offset, s->piece_y)) {
+    if (PieceFits(s, new_piece, s->location_x + x_offset, s->location_y)) {
       s->current_piece = new_piece;
-      s->piece_x += x_offset;
+      s->location_x += x_offset;
       return;
     }
   }
   // Now, see if it can rotate if its pushed to the left.
   for (x_offset = -1; x_offset > -4; x_offset--) {
-    if (PieceFits(s, new_piece, s->piece_x + x_offset, s->piece_y)) {
+    if (PieceFits(s, new_piece, s->location_x + x_offset, s->location_y)) {
       s->current_piece = new_piece;
-      s->piece_x += x_offset;
+      s->location_x += x_offset;
       return;
     }
   }
@@ -482,7 +488,7 @@ static int IsGameOver(TetrisGameState *s) {
   const char *p = tetris_pieces[s->current_piece];
   int piece_x, piece_y, board_y;
   for (piece_y = 0; piece_y < 4; piece_y++) {
-    board_y = s->piece_y - piece_y;
+    board_y = s->location_y - piece_y;
     for (piece_x = 0; piece_x < 4; piece_x++) {
       if (p[piece_y * 4 + piece_x] == ' ') continue;
       // We found a non-space part of the current piece that ended up above the
@@ -512,8 +518,8 @@ static void RemoveRowAndShift(char *board, int row) {
 // This function checks for completed lines, removes any complete lines, and
 // scores points for lines completed. This must be called after a falling piece
 // has landed and after FinishFallingPiece has finished. However,
-// FinishFallingPiece will modify s->piece_y, so the caller is responsible for
-// keeping track of the y position that just landed, and provide it.
+// FinishFallingPiece will modify s->location_y, so the caller is responsible
+// for keeping track of the y position that just landed, and provide it.
 static void CheckForCompleteLines(TetrisDisplay *w, TetrisGameState *s,
   int fallen_piece_y) {
   int completed_row_count = 0;
@@ -565,10 +571,10 @@ static void FinishFallingPiece(TetrisGameState *s) {
   int piece_x, piece_y, board_x, board_y;
   char c;
   for (piece_y = 0; piece_y < 4; piece_y++) {
-    board_y = s->piece_y - piece_y;
+    board_y = s->location_y - piece_y;
     for (piece_x = 0; piece_x < 4; piece_x++) {
       c = p[piece_y * 4 + piece_x];
-      board_x = s->piece_x + piece_x;
+      board_x = s->location_x + piece_x;
       if (c == ' ') continue;
       s->board[board_y * BLOCKS_WIDE + board_x] = c;
     }
@@ -577,8 +583,8 @@ static void FinishFallingPiece(TetrisGameState *s) {
   // Next, get the new falling piece.
   s->current_piece = s->next_piece;
   s->next_piece = RandomNewPiece();
-  s->piece_x = BLOCKS_WIDE / 2;
-  s->piece_y = PIECE_START_Y;
+  s->location_x = BLOCKS_WIDE / 2;
+  s->location_y = PIECE_START_Y;
 }
 
 // This function happens every time either a keypress occurs or
@@ -628,7 +634,7 @@ static int UpdateGameState(TetrisDisplay *w, TetrisGameState *s, double delta,
   if (done_falling) {
     // It's a game over if the falling piece is at all above the board.
     if (IsGameOver(s)) return 0;
-    fallen_piece_y = s->piece_y;
+    fallen_piece_y = s->location_y;
     FinishFallingPiece(s);
     CheckForCompleteLines(w, s, fallen_piece_y);
   }
