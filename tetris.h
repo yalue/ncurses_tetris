@@ -3,7 +3,6 @@
 // We'll use this file to contain commonly-accessed struct definitions from
 // tetris.c.
 #include <curses.h>
-#include <stdint.h>
 
 // The width and height of the area where the blocks go, in blocks rather than
 // characters.
@@ -45,24 +44,24 @@ typedef struct {
   // screen when drawing the cell. Note that cells are drawn as two characters
   // wide, so each character in this array will be printed twice when drawing
   // the board. This starts from the TOP row in the window that's displayed.
-  uint8_t board[BLOCKS_WIDE * BLOCKS_TALL];
+  char board[BLOCKS_WIDE * BLOCKS_TALL];
   // The ID of the next piece that will be generated; the index into the
   // tetris_pieces array.
-  uint8_t next_piece;
+  short next_piece;
   // The x and y location of the current piece being dropped into the board, in
   // a cell coordinate rather than a window character. Note that the coordinate
   // of a piece corresponds to the top left corner of its definition in the
   // tetris_pieces array. Also, note that these coordinates refer to the
   // *bottom left* of the piece on the board!
-  int32_t piece_x;
-  int32_t piece_y;
+  int piece_x;
+  int piece_y;
   // The piece that is currently "falling". Once again, it's an index into the
   // tetris_pieces array.
-  uint8_t current_piece;
+  short current_piece;
   // The player's current score.
-  int32_t score;
+  unsigned score;
   // The number of lines the player has completed.
-  int32_t lines;
+  unsigned lines;
 } TetrisGameState;
 
 // We statically define each piece as a 16-byte strings here. Note that when
@@ -170,8 +169,8 @@ const char *tetris_pieces[] = {
 // This is how we look up rotations. If the current piece is at index i in the
 // tetris_pieces array, then piece_rotations[i] gives the index of its next
 // rotation in the tetris_pieces array.
-uint8_t piece_rotations[] = {1, 0, 2, 4, 3, 6, 5, 8, 9, 10, 7, 12, 13, 14, 11,
-  16, 17, 18, 15};
+char piece_rotations[] = {1, 0, 2, 4, 3, 6, 5, 8, 9, 10, 7, 12, 13, 14, 11, 16,
+  17, 18, 15};
 
 #endif  // TETRIS_H
 

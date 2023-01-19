@@ -212,26 +212,28 @@ static void StatusPrintf(TetrisDisplay *windows, const char *format, ...) {
     format, args);
   va_end(args);
   windows->status_start_time = CurrentSeconds();
-  WriteStatusMessage(windows);
+  RefreshAllWindows(windows);
 }
 
 // Takes a pointer to the game window, and the board array in the game state,
 // and draws the contents of the board.
-static void DrawBoard(WINDOW *w, uint8_t *board) {
+static void DrawBoard(WINDOW *w, char *board) {
   // We'll use these as the coordinates in the ncurses window.
   // The coordinates into the ncurses window.
   int y, x;
   // The index into the board array.
   int i = 0;
-  uint8_t c;
+  char c;
   // Note that we start at y = 1 and x = 1 to skip the window border.
   for (y = 1; y <= BLOCKS_TALL; y++) {
     for (x = 1; x <= (BLOCKS_WIDE * 2); x += 2) {
       c = board[i];
+      // Omit error checking here; if the window gets too small, just let these
+      // fail silently as the pieces fall off the bottom of the screen.
       // Move the cursor and print the char
-      CheckCursesError(mvwaddch(w, y, x, c));
+      mvwaddch(w, y, x, c);
       // Print the second copy of the char
-      CheckCursesError(waddch(w, c));
+      waddch(w, c);
       i++;
     }
   }
@@ -239,7 +241,7 @@ static void DrawBoard(WINDOW *w, uint8_t *board) {
 
 // Takes a pointer to the next piece window, and the index of the piece in the
 // tetris_pieces array. Draws the piece in the window.
-static void DrawNextPiece(WINDOW *w, uint8_t piece) {
+static void DrawNextPiece(WINDOW *w, short piece) {
   const char *p = tetris_pieces[piece];
   int piece_x, piece_y, screen_x, screen_y;
   char c;
@@ -256,7 +258,7 @@ static void DrawNextPiece(WINDOW *w, uint8_t piece) {
 // Returns 1 if a space is available for a falling block, and 0 if not. Returns
 // 0 if the given position is either out of bounds, or overlapping with an
 // existing block. The x, y coordinate is in game cells, NOT ncurses rows/cols.
-static int SpaceAvailable(uint8_t *board, int x, int y) {
+static int SpaceAvailable(char *board, int x, int y) {
   char c;
   if ((x < 0) || (x >= BLOCKS_WIDE)) return 0;
   // We always count space above the board as OK.
@@ -296,21 +298,20 @@ static void DisplayGameState(TetrisDisplay *windows, TetrisGameState *s) {
 }
 
 // Returns a random piece to drop down (i.e., an index into tetris_pieces).
-static uint8_t RandomNewPiece(void) {
+static short RandomNewPiece(void) {
   // Since some pieces have up to four rotations, this allows us to select a
   // random piece rotation without weighting pieces with more rotations over
   // pieces with fewer, as every piece has four entries.
-  static const uint8_t piece_ids[] = {0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4,
+  static const short piece_ids[] = {0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4,
     5, 5, 6, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18};
-  const uint8_t max_choice = sizeof(piece_ids) / sizeof(uint8_t);
+  const short max_choice = sizeof(piece_ids) / sizeof(short);
   return piece_ids[rand() % max_choice];
 }
 
 // Returns 1 if everything in the given game state looks OK, and 0 if not.
 static int SanityCheckState(TetrisGameState *s) {
-  int row, col;
-  uint8_t c;
-  int32_t tmp;
+  int row, col, tmp;
+  char c;
   tmp = s->piece_x;
   if ((tmp < 0) || (tmp >= BLOCKS_WIDE)) return 0;
   tmp = s->piece_y;
@@ -403,7 +404,7 @@ static void InitializeNewGame(TetrisGameState *s) {
 
 // Returns 1 if the given piece can fit at coordinate new_x, new_y on the
 // current board. Otherwise returns 0.
-static int PieceFits(TetrisGameState *s, uint8_t piece, int new_x, int new_y) {
+static int PieceFits(TetrisGameState *s, short piece, int new_x, int new_y) {
   const char *p = tetris_pieces[piece];
   int piece_x, piece_y, board_x, board_y;
 
@@ -442,7 +443,7 @@ static void TryMovingRight(TetrisGameState *s) {
 // Attempts to rotate the current piece to its next position. Does nothing if
 // the rotation is blocked.
 static void TryRotating(TetrisGameState *s) {
-  uint8_t new_piece = piece_rotations[s->current_piece];
+  short new_piece = piece_rotations[s->current_piece];
   int x_offset = 0;
   // First, see if the piece can simply be rotated.
   if (PieceFits(s, new_piece, s->piece_x, s->piece_y)) {
@@ -490,7 +491,7 @@ static int IsGameOver(TetrisGameState *s) {
 }
 
 // Removes the given row from the board, shifting down everything above it.
-static void RemoveRowAndShift(uint8_t *board, int row) {
+static void RemoveRowAndShift(char *board, int row) {
   int x, y, row_start, i;
   for (y = row; y > 0; y--) {
     row_start = y * BLOCKS_WIDE;
@@ -631,6 +632,16 @@ static int UpdateGameState(TetrisDisplay *w, TetrisGameState *s, double delta,
   return 1;
 }
 
+// Writes the information about the game being paused to the tetris board.
+static void PrintPauseMessages(TetrisDisplay *windows) {
+  // We won't show the piece positions while paused.
+  ClearGameBoard(windows);
+  CheckCursesError(mvwprintw(windows->game, 8, 8, "Paused!"));
+  CheckCursesError(mvwprintw(windows->game, 9, 6, "Press space"));
+  CheckCursesError(mvwprintw(windows->game, 10, 7, "to resume"));
+  RefreshAllWindows(windows);
+}
+
 // Pauses the game; essentially turns off the movement timer, clears the board
 // display, and waits for the player to press space or q. Returns 0 if the
 // player "unpaused" by pressing 'q' to quit. Quicksaving and quickloading
@@ -644,13 +655,7 @@ static int PauseGame(TetrisDisplay *windows, TetrisGameState *s,
 
   // When paused, switch back to waiting indefinitely for inputs.
   timeout(-1);
-
-  // We won't show the piece positions while paused.
-  ClearGameBoard(windows);
-  CheckCursesError(mvwprintw(windows->game, 8, 8, "Paused!"));
-  CheckCursesError(mvwprintw(windows->game, 9, 6, "Press space"));
-  CheckCursesError(mvwprintw(windows->game, 10, 7, "to resume"));
-  RefreshAllWindows(windows);
+  PrintPauseMessages(windows);
 
   // Wait for keypresses.
   while (1) {
@@ -665,6 +670,11 @@ static int PauseGame(TetrisDisplay *windows, TetrisGameState *s,
     case ' ':
       timeout(MAX_MS_PER_FRAME);
       return 1;
+    case KEY_RESIZE:
+      DestroyWindows(windows);
+      CreateWindows(windows);
+      PrintPauseMessages(windows);
+      break;
     case 'q':
       timeout(MAX_MS_PER_FRAME);
       return 0;
@@ -720,6 +730,11 @@ static int RunGame(TetrisDisplay *windows, int initial_quickload) {
       last_update_time = CurrentSeconds() - pre_pause_delta;
       should_exit = game_done;
       timeout(MAX_MS_PER_FRAME);
+      break;
+    case KEY_RESIZE:
+      DestroyWindows(windows);
+      CreateWindows(windows);
+      DisplayGameState(windows, &s);
       break;
     case 'q':
       game_done = 1;
@@ -778,6 +793,10 @@ int main(int argc, char **argv) {
       break;
     case ('q'):
       should_exit = 1;
+      break;
+    case (KEY_RESIZE):
+      DestroyWindows(&windows);
+      CreateWindows(&windows);
       break;
     default:
       break;
