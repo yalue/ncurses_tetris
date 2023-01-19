@@ -27,7 +27,7 @@
 // Returns the current time, in seconds.
 static double CurrentSeconds(void) {
   struct timespec ts;
-  if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) != 0) {
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
     endwin();
     printf("Error getting time.\n");
     exit(1);
@@ -322,8 +322,8 @@ static int SanityCheckState(TetrisGameState *s) {
 
   // Important check: make sure the current piece is a valid piece ID.
   tmp = sizeof(tetris_pieces) / sizeof(const char*);
-  if (s->current_piece >= tmp) return 0;
-  if (s->next_piece >= tmp) return 0;
+  if ((s->current_piece < 0) || (s->current_piece >= tmp)) return 0;
+  if ((s->next_piece < 0) || (s->next_piece >= tmp)) return 0;
 
   // Make sure the board contains no invalid characters.
   for (row = 0; row < BLOCKS_TALL; row++) {
