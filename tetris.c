@@ -459,18 +459,20 @@ static void TryRotating(TetrisGameState *s) {
     s->current_piece = new_piece;
     return;
   }
+
   // Perhaps it can be rotated if it gets "pushed" to the side. Try pushing it
   // to the left first, since getting pushed right seems less likely with the
   // pieces already being aligned on the left side of their 4x4 boxes.
-  for (x_offset = 1; x_offset < 4; x_offset++) {
+  for (x_offset = -1; x_offset > -4; x_offset--) {
     if (PieceFits(s, new_piece, s->location_x + x_offset, s->location_y)) {
       s->current_piece = new_piece;
       s->location_x += x_offset;
       return;
     }
   }
-  // Now, see if it can rotate if its pushed to the left.
-  for (x_offset = -1; x_offset > -4; x_offset--) {
+
+  // Now, see if it can rotate if it's pushed to the right.
+  for (x_offset = 1; x_offset < 4; x_offset++) {
     if (PieceFits(s, new_piece, s->location_x + x_offset, s->location_y)) {
       s->current_piece = new_piece;
       s->location_x += x_offset;
