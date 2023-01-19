@@ -38,12 +38,13 @@ typedef struct {
 // This holds everything we need to know about the current state of an ongoing
 // game.
 typedef struct {
-  // Holds the state of the entire board. If a cell is empty, it must be either
-  // 0 or a space character. In any other case, the cell is occupied, and this
-  // must contain the character to draw to the screen when drawing the cell.
-  // Note that cells are drawn as two characters wide, so each character in
-  // this array will be printed twice when drawing the board. This starts from
-  // the TOP row in the window that's displayed.
+  // Holds the state of the entire board. If a cell is empty, it must contain a
+  // space character. It is invalid for a cell to contain a nonprintable
+  // character or whitespace other than ' '. In any case except for ' ', the
+  // cell is occupied, and this must contain the character to draw to the
+  // screen when drawing the cell. Note that cells are drawn as two characters
+  // wide, so each character in this array will be printed twice when drawing
+  // the board. This starts from the TOP row in the window that's displayed.
   uint8_t board[BLOCKS_WIDE * BLOCKS_TALL];
   // The ID of the next piece that will be generated; the index into the
   // tetris_pieces array.
@@ -164,7 +165,6 @@ const char *tetris_pieces[] = {
   "  O "
   "    "
   "    ",
-  NULL,
 };
 
 // This is how we look up rotations. If the current piece is at index i in the

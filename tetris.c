@@ -21,6 +21,9 @@
 // Calls our internal function to print an error and exit if a value is NULL.
 #define CheckNULL(val) InternalCheckNULL((val), #val, __FILE__, __LINE__)
 
+// This is the y position a piece spawns at when entering the board.
+#define PIECE_START_Y (-1)
+
 // Returns the current time, in seconds.
 static double CurrentSeconds(void) {
   struct timespec ts;
@@ -212,13 +215,6 @@ static void StatusPrintf(TetrisDisplay *windows, const char *format, ...) {
   WriteStatusMessage(windows);
 }
 
-// If c is a non-printable character (or just something we don't want to print
-// to the board, returns a ' '.  Otherwise, returns c.
-static char FixNonPrintable(char c) {
-  if ((c < ' ') || (c > '~')) return ' ';
-  return c;
-}
-
 // Takes a pointer to the game window, and the board array in the game state,
 // and draws the contents of the board.
 static void DrawBoard(WINDOW *w, uint8_t *board) {
@@ -231,9 +227,11 @@ static void DrawBoard(WINDOW *w, uint8_t *board) {
   // Note that we start at y = 1 and x = 1 to skip the window border.
   for (y = 1; y <= BLOCKS_TALL; y++) {
     for (x = 1; x <= (BLOCKS_WIDE * 2); x += 2) {
-      c = FixNonPrintable(board[i]);
-      // NOTE: Replace with something more efficient than format strings.
-      CheckCursesError(mvwprintw(w, y, x, "%c%c", c, c));
+      c = board[i];
+      // Move the cursor and print the char
+      CheckCursesError(mvwaddch(w, y, x, c));
+      // Print the second copy of the char
+      CheckCursesError(waddch(w, c));
       i++;
     }
   }
@@ -287,16 +285,6 @@ static void DrawFallingPiece(WINDOW *w, TetrisGameState *s) {
   }
 }
 
-// TODO: Sanity checks for quickload:
-//  - Make sure there are no completed rows in the board (would be impossible
-//    in a quicksave).
-//  - Score > lines
-//  - lines not negative
-//  - Next piece a valid index.
-//  - Current piece a valid index.
-//  - piece_x and piece_y are valid.
-
-
 // Writes the score, piece, and so on, in the game window.
 static void DisplayGameState(TetrisDisplay *windows, TetrisGameState *s) {
   DrawBoard(windows->game, s->board);
@@ -318,22 +306,79 @@ static uint8_t RandomNewPiece(void) {
   return piece_ids[rand() % max_choice];
 }
 
+// Returns 1 if everything in the given game state looks OK, and 0 if not.
+static int SanityCheckState(TetrisGameState *s) {
+  int row, col;
+  uint8_t c;
+  int32_t tmp;
+  tmp = s->piece_x;
+  if ((tmp < 0) || (tmp >= BLOCKS_WIDE)) return 0;
+  tmp = s->piece_y;
+  if ((tmp < PIECE_START_Y) || (tmp >= BLOCKS_TALL)) return 0;
+
+  // Important check: make sure the current piece is a valid piece ID.
+  tmp = sizeof(tetris_pieces) / sizeof(const char*);
+  if (s->current_piece >= tmp) return 0;
+  if (s->next_piece >= tmp) return 0;
+
+  // Make sure the board contains no invalid characters.
+  for (row = 0; row < BLOCKS_TALL; row++) {
+    for (col = 0; col < BLOCKS_WIDE; col++) {
+      c = s->board[row * BLOCKS_WIDE + col];
+      if ((c < ' ') || (c > '~')) return 0;
+    }
+  }
+
+  // There are clearly more sanity checks we can do, but these are all that
+  // we'll test for now. Ideas for later:
+  // - No completed lines
+  // - Score is at least lines * 100.
+
+  return 1;
+}
+
 // Attempts to quickload a game state from the quicksave file. If any error
 // occurs in loading or validating the file, this will *not* exit or crash;
 // instead it will just print an error message to the game display and return
 // 0. If any error occurs, this will *not* modify s.
 static int TryQuickload(TetrisDisplay *windows, TetrisGameState *s) {
-  // TODO: Implement TryQuickload.
-  StatusPrintf(windows, "Quickload not yet implemented!");
-  return 0;
+  // Load state to a temporary location so we won't ruin the game if the load
+  // fails for any reason.
+  TetrisGameState tmp;
+  FILE *f = fopen("tetris_quicksave.bin", "rb");
+  if (!f) {
+    StatusPrintf(windows, "Quickload open error: %s", strerror(errno));
+    return 0;
+  }
+  if (fread(&tmp, sizeof(tmp), 1, f) < 1) {
+    StatusPrintf(windows, "Quickload read error: %s", strerror(errno));
+    return 0;
+  }
+  if (!SanityCheckState(&tmp)) {
+    StatusPrintf(windows, "Invalid tetris_quicksave.bin contents");
+    return 0;
+  }
+  StatusPrintf(windows, "Quickload complete! Unpause to play.");
+  *s = tmp;
+  return 1;
 }
 
 // Attempts to save the game state to the quicksave file. If any error occurs,
 // this will *not* exit or crash, but instead will print an error message to
 // the game display and return 0.
 static void DoQuicksave(TetrisDisplay *windows, TetrisGameState *s) {
-  // TODO: Implement DoQuicksave.
-  StatusPrintf(windows, "Quicksave not yet implemented!");
+  FILE *f = fopen("tetris_quicksave.bin", "wb");
+  if (!f) {
+    StatusPrintf(windows, "Quicksave open error: code %d", errno);
+    return;
+  }
+  if (fwrite(s, sizeof(*s), 1, f) < 1) {
+    StatusPrintf(windows, "Quicksave write error: code %d", errno);
+    fclose(f);
+    return;
+  }
+  fclose(f);
+  StatusPrintf(windows, "Quicksave written OK!");
 }
 
 // Takes the game window and empties it.
@@ -352,7 +397,7 @@ static void InitializeNewGame(TetrisGameState *s) {
   s->next_piece = RandomNewPiece();
   s->current_piece = RandomNewPiece();
   // The piece starts at the top, in the middle.
-  s->piece_y = 0;
+  s->piece_y = PIECE_START_Y;
   s->piece_x = BLOCKS_WIDE / 2;
 }
 
@@ -398,8 +443,32 @@ static void TryMovingRight(TetrisGameState *s) {
 // the rotation is blocked.
 static void TryRotating(TetrisGameState *s) {
   uint8_t new_piece = piece_rotations[s->current_piece];
-  if (!PieceFits(s, new_piece, s->piece_x, s->piece_y)) return;
-  s->current_piece = new_piece;
+  int x_offset = 0;
+  // First, see if the piece can simply be rotated.
+  if (PieceFits(s, new_piece, s->piece_x, s->piece_y)) {
+    s->current_piece = new_piece;
+    return;
+  }
+  // Perhaps it can be rotated if it gets "pushed" to the side. Try pushing it
+  // to the left first, since getting pushed right seems less likely with the
+  // pieces already being aligned on the left side of their 4x4 boxes.
+  for (x_offset = 1; x_offset < 4; x_offset++) {
+    if (PieceFits(s, new_piece, s->piece_x + x_offset, s->piece_y)) {
+      s->current_piece = new_piece;
+      s->piece_x += x_offset;
+      return;
+    }
+  }
+  // Now, see if it can rotate if its pushed to the left.
+  for (x_offset = -1; x_offset > -4; x_offset--) {
+    if (PieceFits(s, new_piece, s->piece_x + x_offset, s->piece_y)) {
+      s->current_piece = new_piece;
+      s->piece_x += x_offset;
+      return;
+    }
+  }
+
+  // The piece couldn't rotate.
 }
 
 // Must be called after the falling piece can't fall any more, but *before*
@@ -505,7 +574,7 @@ static void FinishFallingPiece(TetrisGameState *s) {
   s->current_piece = s->next_piece;
   s->next_piece = RandomNewPiece();
   s->piece_x = BLOCKS_WIDE / 2;
-  s->piece_y = -4;
+  s->piece_y = PIECE_START_Y;
 }
 
 // This function happens every time either a keypress occurs or
@@ -618,7 +687,9 @@ static int RunGame(TetrisDisplay *windows, int initial_quickload) {
   down_movement_timer = 0.0;
   last_update_time = CurrentSeconds();
   if (initial_quickload) {
-    if (!TryQuickload(windows, &s)) {
+    if (TryQuickload(windows, &s)) {
+      PauseGame(windows, &s, 0);
+    } else {
       InitializeNewGame(&s);
     }
   } else {
