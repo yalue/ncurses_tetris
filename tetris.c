@@ -409,14 +409,18 @@ static void InitializeNewGame(TetrisGameState *s) {
 // current board. Otherwise returns 0.
 static int PieceFits(TetrisGameState *s, short piece, int new_x, int new_y) {
   const char *p = tetris_pieces[piece];
-  int piece_x, piece_y, board_x, board_y;
+  int piece_x, piece_y, board_x, board_y, i = 0;
 
   for (piece_y = 0; piece_y < 4; piece_y++) {
     board_y = new_y - piece_y;
     for (piece_x = 0; piece_x < 4; piece_x++) {
       board_x = new_x + piece_x;
-      if (p[piece_y * 4 + piece_x] == ' ') continue;
+      if (p[i] == ' ') {
+        i++;
+        continue;
+      }
       if (!SpaceAvailable(s->board, board_x, board_y)) return 0;
+      i++;
     }
   }
   return 1;
