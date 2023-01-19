@@ -417,8 +417,32 @@ static void TryMovingRight(TetrisGameState *s) {
   s->piece_x++;
 }
 
+// Returns 1 if a piece with the new ID can fit at coordinate new_x, new_y on
+// the current board. Otherwise returns 0. Used internally when rotating a
+// piece.
+static int PieceFits(TetrisGameState *s, uint8_t new_piece, int new_x,
+  int new_y) {
+  const char *p = tetris_pieces[new_piece];
+  int piece_x, piece_y, board_x, board_y;
+  // TODO: Use this function for all TryMoving functions.
+
+  for (piece_y = 0; piece_y < 4; piece_y++) {
+    board_y = new_y - piece_y;
+    for (piece_x = 0; piece_x < 4; piece_x++) {
+      board_x = new_x + piece_x;
+      if (p[piece_y * 4 + piece_x] == ' ') continue;
+      if (!SpaceAvailable(s->board, board_x, board_y)) return 0;
+    }
+  }
+  return 1;
+}
+
+// Attempts to rotate the current piece to its next position. Does nothing if
+// the rotation is blocked.
 static void TryRotating(TetrisGameState *s) {
-  // TODO: Implement TryRotating.
+  uint8_t new_piece = piece_rotations[s->current_piece];
+  if (!PieceFits(s, new_piece, s->piece_x, s->piece_y)) return;
+  s->current_piece = new_piece;
 }
 
 // Must be called after the falling piece can't fall any more, but *before*
