@@ -302,8 +302,8 @@ static void DisplayGameState(TetrisDisplay *windows, TetrisGameState *s) {
   DrawBoard(windows->game, s->board);
   DrawNextPiece(windows->next_piece, s->next_piece);
   DrawFallingPiece(windows->game, s);
-  CheckCursesError(mvwprintw(windows->score, 1, 2, "%011d", s->score));
-  CheckCursesError(mvwprintw(windows->line_count, 1, 2, "%011d", s->lines));
+  CheckCursesError(mvwprintw(windows->score, 1, 2, "% 11d", s->score));
+  CheckCursesError(mvwprintw(windows->line_count, 1, 2, "% 11d", s->lines));
   RefreshAllWindows(windows);
 }
 
@@ -441,10 +441,11 @@ static int IsGameOver(TetrisGameState *s) {
 
 // Removes the given row from the board, shifting down everything above it.
 static void RemoveRowAndShift(uint8_t *board, int row) {
-  int x, y, i;
-  for (y = row; y < 0; y--) {
+  int x, y, row_start, i;
+  for (y = row; y > 0; y--) {
+    row_start = y * BLOCKS_WIDE;
     for (x = 0; x < BLOCKS_WIDE; x++) {
-      i = y * BLOCKS_WIDE + x;
+      i = row_start + x;
       board[i] = board[i - BLOCKS_WIDE];
     }
   }
