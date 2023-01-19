@@ -356,75 +356,11 @@ static void InitializeNewGame(TetrisGameState *s) {
   s->piece_x = BLOCKS_WIDE / 2;
 }
 
-// Attempts to move a falling piece down by one spot. Returns 0 if the piece is
-// blocked, otherwise moves the piece down by 1 row.
-static int TryMovingDown(TetrisGameState *s) {
-  const char *p = tetris_pieces[s->current_piece];
+// Returns 1 if the given piece can fit at coordinate new_x, new_y on the
+// current board. Otherwise returns 0.
+static int PieceFits(TetrisGameState *s, uint8_t piece, int new_x, int new_y) {
+  const char *p = tetris_pieces[piece];
   int piece_x, piece_y, board_x, board_y;
-
-  // NOTE: Can be more efficient.
-  for (piece_y = 0; piece_y < 4; piece_y++) {
-    board_y = s->piece_y - piece_y;
-    if (board_y < -1) continue;
-    for (piece_x = 0; piece_x < 4; piece_x++) {
-      if (p[piece_y * 4 + piece_x] == ' ') continue;
-      board_x = s->piece_x + piece_x;
-      // Note that the falling piece isn't part of the "board" yet, so we don't
-      // need to worry about it overlapping with itself.
-      if (!SpaceAvailable(s->board, board_x, board_y + 1)) return 0;
-    }
-  }
-
-  // Move the piece down.
-  s->piece_y++;
-  return 1;
-}
-
-// Attempts to move a falling piece left by one column. Doesn't move the piece
-// if the movement is blocked.
-static void TryMovingLeft(TetrisGameState *s) {
-  const char *p = tetris_pieces[s->current_piece];
-  int piece_x, piece_y, board_x, board_y;
-  // Can't move left at all if we're already on the left edge.
-  if (s->piece_x == 0) return;
-
-  for (piece_y = 0; piece_y < 4; piece_y++) {
-    board_y = s->piece_y - piece_y;
-    for (piece_x = 0; piece_x < 4; piece_x++) {
-      board_x = s->piece_x + piece_x;
-      if (p[piece_y * 4 + piece_x] == ' ') continue;
-      if (!SpaceAvailable(s->board, board_x - 1, board_y)) return;
-    }
-  }
-  s->piece_x--;
-}
-
-// Similar to TryMovingLeft, but attempts to move the falling piece right.
-static void TryMovingRight(TetrisGameState *s) {
-  const char *p = tetris_pieces[s->current_piece];
-  int piece_x, piece_y, board_x, board_y;
-  // Unfortunately, we can't stop early here, because the rightmost column
-  // depends on how far right the piece is (most pieces aren't 4 wide!).
-
-  for (piece_y = 0; piece_y < 4; piece_y++) {
-    board_y = s->piece_y - piece_y;
-    for (piece_x = 0; piece_x < 4; piece_x++) {
-      board_x = s->piece_x + piece_x;
-      if (p[piece_y * 4 + piece_x] == ' ') continue;
-      if (!SpaceAvailable(s->board, board_x + 1, board_y)) return;
-    }
-  }
-  s->piece_x++;
-}
-
-// Returns 1 if a piece with the new ID can fit at coordinate new_x, new_y on
-// the current board. Otherwise returns 0. Used internally when rotating a
-// piece.
-static int PieceFits(TetrisGameState *s, uint8_t new_piece, int new_x,
-  int new_y) {
-  const char *p = tetris_pieces[new_piece];
-  int piece_x, piece_y, board_x, board_y;
-  // TODO: Use this function for all TryMoving functions.
 
   for (piece_y = 0; piece_y < 4; piece_y++) {
     board_y = new_y - piece_y;
@@ -435,6 +371,27 @@ static int PieceFits(TetrisGameState *s, uint8_t new_piece, int new_x,
     }
   }
   return 1;
+}
+
+// Attempts to move a falling piece down by one spot. Returns 0 if the piece is
+// blocked, otherwise moves the piece down by 1 row.
+static int TryMovingDown(TetrisGameState *s) {
+  if (!PieceFits(s, s->current_piece, s->piece_x, s->piece_y + 1)) return 0;
+  s->piece_y++;
+  return 1;
+}
+
+// Attempts to move a falling piece left by one column. Doesn't move the piece
+// if the movement is blocked.
+static void TryMovingLeft(TetrisGameState *s) {
+  if (!PieceFits(s, s->current_piece, s->piece_x - 1, s->piece_y)) return;
+  s->piece_x--;
+}
+
+// Similar to TryMovingLeft, but attempts to move the falling piece right.
+static void TryMovingRight(TetrisGameState *s) {
+  if (!PieceFits(s, s->current_piece, s->piece_x + 1, s->piece_y)) return;
+  s->piece_x++;
 }
 
 // Attempts to rotate the current piece to its next position. Does nothing if
