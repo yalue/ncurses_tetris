@@ -487,6 +487,14 @@ static void TryRotating(TetrisGameState *s) {
   // The piece couldn't rotate.
 }
 
+// Moves the piece down until it can't move down any more. Returns the number
+// of rows that it moved down.
+static int MoveDownToContactPosition(TetrisGameState *s) {
+  int to_return = 0;
+  while (TryMovingDown(s)) to_return++;
+  return to_return;
+}
+
 // Must be called after the falling piece can't fall any more, but *before*
 // FinishFallingPiece. Returns 1 if any of the falling piece is above the top
 // of the board.
@@ -625,6 +633,18 @@ static int UpdateGameState(TetrisDisplay *w, TetrisGameState *s, double delta,
   default:
     // This occurs if no key was pressed (input_key == ERR).
     break;
+  }
+
+  // If the input key is enter, move down to the contact position, and then
+  // try moving down again.
+  if (input_key == KEY_NPAGE) {
+    // Increase the score here, just as we would if it moved down one line at
+    // a time.
+    s->score += MoveDownToContactPosition(s);
+
+    // We'll set the input key to KEY_DOWN just to get to the next logical
+    // block and allow the piece to land.
+    input_key = KEY_DOWN;
   }
 
   // Process downward movement after side-to-side movements or rotations.
