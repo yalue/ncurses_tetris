@@ -30,12 +30,14 @@ Controls:
 
  - Down arrow: speed the current piece's descent.
 
- - The 'S' key: quick save (will create the file `./tetris_quicksave.bin`).
+ - Page down: Immediately move the current piece down to its landing position.
 
- - The 'L' key: load last quick save. This will read `./tetris_quicksave.bin`
+ - The 's' key: quick save (will create the file `./tetris_quicksave.bin`).
+
+ - The 'l' key: load last quick save. This will read `./tetris_quicksave.bin`
    if it exists. Otherwise, pressing 'L' does nothing.
 
- - The 'Q' key: quits the game immediately.
+ - The 'q' key: quits the game immediately.
 
 Troubleshooting
 ---------------
