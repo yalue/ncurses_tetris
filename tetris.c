@@ -243,15 +243,16 @@ static void DrawBoard(WINDOW *w, char *board) {
 // tetris_pieces array. Draws the piece in the window.
 static void DrawNextPiece(WINDOW *w, short piece) {
   const char *p = tetris_pieces[piece];
-  int piece_x, piece_y, screen_x, screen_y;
+  int piece_x, piece_y, screen_x, screen_y, i = 0;
   char c;
   for (piece_y = 0; piece_y < 4; piece_y++) {
     screen_y = 5 - piece_y;
     for (piece_x = 0; piece_x < 4; piece_x++) {
-      c = p[piece_y * 4 + piece_x];
-      screen_x = (piece_x * 2) + 3;
+      c = p[i];
+      screen_x = (piece_x << 1) + 3;
       mvwaddch(w, screen_y, screen_x, c);
       waddch(w, c);
+      i++;
     }
   }
 }
@@ -266,7 +267,7 @@ static int SpaceAvailable(char *board, int x, int y) {
   if (y < 0) return 1;
   if (y >= BLOCKS_TALL) return 0;
   c = board[y * BLOCKS_WIDE + x];
-  return (c <= ' ') || (c >= '~');
+  return c == ' ';
 }
 
 static void DrawFallingPiece(WINDOW *w, TetrisGameState *s) {
@@ -635,7 +636,7 @@ static int UpdateGameState(TetrisDisplay *w, TetrisGameState *s, double delta,
     break;
   }
 
-  // If the input key is enter, move down to the contact position, and then
+  // If the input key is page down, move down to the contact position, and then
   // try moving down again.
   if (input_key == KEY_NPAGE) {
     // Increase the score here, just as we would if it moved down one line at
