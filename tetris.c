@@ -296,8 +296,8 @@ static void DisplayGameState(TetrisDisplay *windows, TetrisGameState *s) {
   DrawBoard(windows->game, s->board);
   DrawNextPiece(windows->next_piece, s->next_piece);
   DrawFallingPiece(windows->game, s);
-  mvwprintw(windows->score, 1, 2, "% 11d", s->score);
-  mvwprintw(windows->line_count, 1, 2, "% 11d", s->lines);
+  mvwprintw(windows->score, 1, 2, "% 11u", s->score);
+  mvwprintw(windows->line_count, 1, 2, "% 11u", s->lines);
   RefreshAllWindows(windows);
 }
 
