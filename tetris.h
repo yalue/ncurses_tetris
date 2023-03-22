@@ -9,6 +9,8 @@
 #define BLOCKS_WIDE (10)
 #define BLOCKS_TALL (20)
 
+// This is the y position a piece spawns at when entering the board.
+#define PIECE_START_Y (-1)
 
 // This struct keeps track of the tetris display windows from ncurses.
 typedef struct {

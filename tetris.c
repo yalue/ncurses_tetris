@@ -21,8 +21,6 @@
 // Calls our internal function to print an error and exit if a value is NULL.
 #define CheckNULL(val) InternalCheckNULL((val), #val, __FILE__, __LINE__)
 
-// This is the y position a piece spawns at when entering the board.
-#define PIECE_START_Y (-1)
 
 // Returns the current time, in seconds.
 static double CurrentSeconds(void) {
