@@ -68,7 +68,7 @@ typedef struct {
 // the game is being rendered, the widths of these will be doubled. This
 // contains all pieces along with their rotations. There are 19 of them. Note
 // that the pieces in this array are "upside down", with the bottom row first.
-const char *tetris_pieces[] = {
+static const char *tetris_pieces[] = {
   // 0:
   "===="
   "    "
@@ -169,8 +169,8 @@ const char *tetris_pieces[] = {
 // This is how we look up rotations. If the current piece is at index i in the
 // tetris_pieces array, then piece_rotations[i] gives the index of its next
 // rotation in the tetris_pieces array.
-char piece_rotations[] = {1, 0, 2, 4, 3, 6, 5, 8, 9, 10, 7, 12, 13, 14, 11, 16,
-  17, 18, 15};
+static char piece_rotations[] = {1, 0, 2, 4, 3, 6, 5, 8, 9, 10, 7, 12, 13, 14,
+  11, 16, 17, 18, 15};
 
 #endif  // TETRIS_H
 
