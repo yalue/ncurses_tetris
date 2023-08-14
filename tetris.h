@@ -18,7 +18,7 @@ typedef struct {
   WINDOW *top_window;
   // The "game" area, where the pieces are dropped and moved around.
   // Should be 20 characters wide (for 10 blocks) and 20 character tall (for
-  // 10 blocks), plus one char of padding around the border; a total of 22x22
+  // 20 blocks), plus one char of padding around the border; a total of 22x22
   // characters.
   WINDOW *game;
   // The window showing only the player's current score.
